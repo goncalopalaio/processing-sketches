@@ -1,3 +1,22 @@
+class IVec2 {
+  int x;
+  int y;
+  IVec2(int x, int y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+class IVec3 {
+  int x;
+  int y;
+  int z;
+  IVec3(int x, int y, int z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+}
 
 // ids
 
@@ -5,6 +24,7 @@ final int id_floor  = 0;
 final int id_player = 1;
 final int id_box    = 2;
 final int id_wall   = 3;
+final int id_goals  = 4;
 
 // directions
 
@@ -24,30 +44,67 @@ int box_y = 4;
 
 // game initial parameters
 
-int board_offset = 40;
+Grid grid = new Grid();
 
-int wg = 11;
-int hg = 11;
-int grid_cell_size = 20;
-int grid_cell_spacing = 30;
-int grid[][] = new int[hg][wg];
+class Grid {
+  boolean solved = false;
+  int w;
+  int h;
+  int [][] lookup;
+  IVec3 player = new IVec3(0, 0, 0);
+  ArrayList<IVec3> boxes = new ArrayList();
+  ArrayList<IVec3> walls = new ArrayList();
+  ArrayList<IVec3> goals = new ArrayList();
+}
 
-class PosInc {
-  int x;
-  int y;
-  PosInc(int x, int y) {
-    this.x = x;
-    this.y = y;
+void load_grid() {
+  grid.w = 10;
+  grid.h = 10;
+  grid.lookup = new int[grid.h][grid.w];
+  grid.player = new IVec3(0, 0, 0);
+
+  grid.boxes.add(new IVec3(4, 4, 0));
+  grid.walls.add(new IVec3(4, 7, 0));
+  grid.walls.add(new IVec3(4, 8, 0));
+  grid.walls.add(new IVec3(5, 8, 0));
+  grid.walls.add(new IVec3(6, 8, 0));
+  grid.walls.add(new IVec3(7, 8, 0));
+  grid.walls.add(new IVec3(8, 8, 0));
+  
+  grid.goals.add(new IVec3(3,3,0));
+   
+  update_grid_lookup(grid);
+}
+
+void update_grid_lookup(Grid grid) {
+  update_grid_lookup_player(grid);
+  update_grid_lookup_boxes(grid);
+  update_grid_lookup_walls(grid);
+}
+
+void update_grid_lookup_player(Grid grid) {
+  grid.lookup[grid.player.y][grid.player.x] = id_player;
+}
+
+void update_grid_lookup_boxes(Grid grid) {
+  for (IVec3 g : grid.boxes) {
+    grid.lookup[g.y][g.x] = id_box;
   }
 }
+
+void update_grid_lookup_walls(Grid grid) {
+  for (IVec3 g : grid.walls) {
+    grid.lookup[g.y][g.x] = id_wall;
+  }
+}
+
 
 void setup() {
   size(600, 600);
   background(100);
   noFill();
 
-  grid[player_x][player_y] = id_player;
-  grid[box_x][box_y] = id_box;
+  load_grid();
 }
 
 void keyPressed() {
@@ -71,117 +128,144 @@ void keyPressed() {
   }
 }
 
-boolean in_boundaries(int x, int y) {
-  if (y < 0 || y >= hg || x < 0 || x >= wg) return false;
+boolean in_bounds_x(Grid grid, int x) {
+  return x >= 0 && x < grid.w;
+}
+
+boolean in_bounds_y(Grid grid, int y) {
+  return y >= 0 && y < grid.h;
+}
+
+boolean in_bounds(Grid grid, int x, int y) {
+  if (y < 0 || y >= grid.h || x < 0 || x >= grid.w) return false;
   return true;
 }
 
-PosInc apply_direction_in_bounds(int x, int y, int direction) {
-  int mov_x = 0;
-  int mov_y = 0;
+IVec3 get_increment(Grid grid, int x, int y, int direction) {
+  IVec3 inc = null;
   switch(direction) {
-
   case dir_up:
-    if ((y - 1) < 0) return null;   
-    mov_y -= 1;
-
+    if (in_bounds_y(grid, y - 1)) inc = new IVec3(0, -1, 0); 
     break;
-
   case dir_down:
-    if ((y + 1) >= hg) return null;
-    mov_y += 1;
+    if (in_bounds_y(grid, y + 1)) inc = new IVec3(0, 1, 0);
     break;
-
   case dir_left:
-    if ((x - 1) < 0) return null;
-    mov_x -= 1;
+    if (in_bounds_x(grid, x - 1)) inc = new IVec3(-1, 0, 0);
     break;
-
   case dir_right:
-    if ((x + 1) >= hg) return null;
-    mov_x += 1;
+    if (in_bounds_x(grid, x + 1)) inc = new IVec3(1, 0, 0);
     break;
   }
 
-  if ((mov_x != 0 || mov_y != 0) && grid[y + mov_y][x + mov_x] == id_wall) return null;
-
-  return new PosInc(mov_x, mov_y);
+  return inc;
 }
 
-void consume_queued_dir_player() {
-  if (queued_dir == dir_empty) return;
-  int new_x = player_x;
-  int new_y = player_y;
-  
-  
-  PosInc inc = apply_direction_in_bounds(player_x, player_y, queued_dir);  
-  if (inc != null) {
-    println("Player_Can_Move");
-    new_x = player_x + inc.x; 
-    new_y = player_y + inc.y;
-    if (grid[new_y][new_x] == id_box) {
-      println("Box_In_Next_Step");
-      PosInc box_inc = apply_direction_in_bounds(new_x, new_y, queued_dir);
-      if (inc != null) {
-        player_x = new_x;
-        player_y = new_y;
-        grid[new_y + box_inc.y][new_x + box_inc.x] = id_box;
-      }
-    } else {
-      println("Moving_Player");
-      player_x = new_x;
-      player_y = new_y;
+void add_increment_to_object(ArrayList<IVec3> objects, int x, int y, IVec3 inc) {
+  for (IVec3 g : objects) {
+    if (g.x == x && g.y == y) {
+      g.x += inc.x;
+      g.y += inc.y;
+      g.z += inc.z;
     }
   }
+}
 
-  // todo goncalo: move everything out of the grid into lists
+void handle_input(Grid grid, int direction) {
+  IVec3 player_inc = get_increment(grid, grid.player.x, grid.player.y, direction);
 
-  // todo goncalo: improve this. Dont' need to reset everything in the grid.
-  
-  for (int ih = 0; ih < hg; ih++) {
-    for (int iw = 0; iw < wg; iw++) {
-      grid[ih][iw] = id_floor;
+  if (player_inc != null) {
+    int np_x = grid.player.x + player_inc.x;
+    int np_y = grid.player.y + player_inc.y;
+
+    if (grid.lookup[np_y][np_x] == id_wall) return;
+
+    if (grid.lookup[np_y][np_x] == id_box) {
+      IVec3 box_inc = get_increment(grid, grid.player.x + player_inc.x, grid.player.y + player_inc.y, direction);
+
+      if (box_inc == null) return;
+
+      int nb_x = np_x + box_inc.x;
+      int nb_y = np_y + box_inc.y;
+      if (grid.lookup[nb_y][nb_x] == id_wall) return;
+
+      add_increment_to_object(grid.boxes, np_x, np_y, box_inc);
+      update_grid_lookup_boxes(grid);
     }
+
+    grid.player.x += player_inc.x;
+    grid.player.y += player_inc.y;
+    grid.player.z += player_inc.z;
+    update_grid_lookup_player(grid);
   }
+}
 
-  grid[player_y][player_x] = id_player;
-  grid[box_y][box_x] = id_box;
-
-  grid[8][8] = id_wall;
-
-  queued_dir = dir_empty;
+boolean is_solved(Grid grid) {
+  int x = grid.player.x;
+  int y = grid.player.y;
+  
+  for (IVec3 g : grid.goals) {
+     if (g.x == x && g.y == y) return true;   
+  }
+   return false;
 }
 
 void draw() {
+  // background
+  if (grid.solved) {
+    
+    background(100, 200, 100);
+  } else {
+    background(100);
+  }
+  
+  // parameters that could be tweaked
+  
+  int board_offset = 40;
+  int grid_cell_size = 20;
+  int grid_cell_spacing = 30;
+
   // interaction
 
-  consume_queued_dir_player();
-
+  handle_input(grid, queued_dir);
+  queued_dir = dir_empty;
+  
+  if (is_solved(grid)) grid.solved = true;
+  
   // rendering
-  for (int ih = 0; ih < hg; ih++) {
-    for (int iw = 0; iw < wg; iw++) {
+  for (int ih = 0; ih < grid.h; ih++) {
+    for (int iw = 0; iw < grid.w; iw++) {
       int screen_x = (iw * grid_cell_spacing) + board_offset;
       int screen_y = (ih * grid_cell_spacing) + board_offset;
 
-      int id = grid[ih][iw];
-      switch(id) {
-      case id_floor:
-        fill(10 + iw * 2, 10 + ih, 0);
-        break;
-      case id_player:
-        fill(150, 50, 50);
-        break;
-      case id_box:
-        fill(150, 150, 50);
-        break;
-      case id_wall:
-        fill(50, 150, 150);
-        break;
-      default:
-        throw new RuntimeException("Unknown id in the grid");
-      }
-
+      fill(10 + iw * 2, 10 + ih, 10);
       rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
     }
   }
+  
+  for (IVec3 g : grid.goals) {
+    fill(200, 200, 200);
+    int screen_x = (g.x * grid_cell_spacing) + board_offset;
+    int screen_y = (g.y * grid_cell_spacing) + board_offset;
+    rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
+  }
+  
+  for (IVec3 g : grid.boxes) {
+    fill(102, 10, 0);
+    int screen_x = (g.x * grid_cell_spacing) + board_offset;
+    int screen_y = (g.y * grid_cell_spacing) + board_offset;
+    rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
+  }
+
+  for (IVec3 g : grid.walls) {
+    fill(10, 10, 110);
+    int screen_x = (g.x * grid_cell_spacing) + board_offset;
+    int screen_y = (g.y * grid_cell_spacing) + board_offset;
+    rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
+  }
+
+  fill(102, 10, 110);
+  int screen_x = (grid.player.x * grid_cell_spacing) + board_offset;
+  int screen_y = (grid.player.y * grid_cell_spacing) + board_offset;
+  rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
 }
