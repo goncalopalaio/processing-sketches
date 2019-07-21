@@ -46,6 +46,8 @@ int box_y = 4;
 
 Grid grid = new Grid();
 
+String initial_level = "l3.lvl";
+
 class Grid {
   boolean solved = false;
   int w;
@@ -57,7 +59,8 @@ class Grid {
   ArrayList<IVec3> goals = new ArrayList();
 }
 
-void load_grid() {
+void load_default_grid() {
+  grid.solved = false;
   grid.w = 10;
   grid.h = 10;
   grid.lookup = new int[grid.h][grid.w];
@@ -70,10 +73,56 @@ void load_grid() {
   grid.walls.add(new IVec3(6, 8, 0));
   grid.walls.add(new IVec3(7, 8, 0));
   grid.walls.add(new IVec3(8, 8, 0));
-  
-  grid.goals.add(new IVec3(3,3,0));
-   
+
+  grid.goals.add(new IVec3(3, 3, 0));
+
   update_grid_lookup(grid);
+}
+
+void load_grid(String file) {
+
+  String[] lines = loadStrings(file);
+  println("There are " + lines.length + " lines");
+
+  int header_lines = 2;
+  for (int i = 0; i < lines.length; i++) {
+    String line = lines[i];
+    if (i == 0) {
+      println("Version: " + line);
+    } else if ( i == 1 ) {
+      println("Size: " + line);
+      String[] size = line.split(" ");
+      grid = new Grid();
+      grid.solved = false;
+      grid.w = int(size[1]);
+      grid.h = int(size[0]);
+      grid.lookup = new int[grid.h][grid.w];
+    } else {
+      String[] elems = line.split("");
+      int y = i - header_lines;
+      int x = 0;
+
+      for (String e : elems) {
+        if (e.equals("W")) {
+          grid.walls.add(new IVec3(x, y, 0));
+        } else if (e.equals("B")) {
+          grid.boxes.add(new IVec3(x, y, 0));
+        } else if (e.equals("P")) {
+          grid.player = new IVec3(x, y, 0);
+        } else if (e.equals("G")) {
+          grid.goals.add(new IVec3(x, y, 0));
+        } 
+
+        x += 1;
+      }
+    }
+  }
+  update_grid_lookup(grid);
+
+
+  println("Walls: " + grid.walls.size());
+  println("Boxes: " + grid.boxes.size());
+  println("Goals: " + grid.goals.size());
 }
 
 void update_grid_lookup(Grid grid) {
@@ -104,7 +153,7 @@ void setup() {
   background(100);
   noFill();
 
-  load_grid();
+  load_grid(initial_level);
 }
 
 void keyPressed() {
@@ -125,6 +174,12 @@ void keyPressed() {
     default:
       queued_dir = dir_empty;
     }
+    return;
+  }
+
+  if (key == 'r' || key == 'R') {
+    println("reloading");
+    load_grid(initial_level);
   }
 }
 
@@ -188,6 +243,7 @@ void handle_input(Grid grid, int direction) {
       int nb_x = np_x + box_inc.x;
       int nb_y = np_y + box_inc.y;
       if (grid.lookup[nb_y][nb_x] == id_wall) return;
+      if (grid.lookup[nb_y][nb_x] == id_box) return;
 
       add_increment_to_object(grid.boxes, np_x, np_y, box_inc);
       update_grid_lookup_boxes(grid);
@@ -203,24 +259,23 @@ void handle_input(Grid grid, int direction) {
 boolean is_solved(Grid grid) {
   int x = grid.player.x;
   int y = grid.player.y;
-  
+
   for (IVec3 g : grid.goals) {
-     if (g.x == x && g.y == y) return true;   
+    if (g.x == x && g.y == y) return true;
   }
-   return false;
+  return false;
 }
 
 void draw() {
   // background
   if (grid.solved) {
-    
     background(100, 200, 100);
   } else {
     background(100);
   }
-  
+
   // parameters that could be tweaked
-  
+
   int board_offset = 40;
   int grid_cell_size = 20;
   int grid_cell_spacing = 30;
@@ -229,9 +284,9 @@ void draw() {
 
   handle_input(grid, queued_dir);
   queued_dir = dir_empty;
-  
+
   if (is_solved(grid)) grid.solved = true;
-  
+
   // rendering
   for (int ih = 0; ih < grid.h; ih++) {
     for (int iw = 0; iw < grid.w; iw++) {
@@ -242,14 +297,14 @@ void draw() {
       rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
     }
   }
-  
+
   for (IVec3 g : grid.goals) {
     fill(200, 200, 200);
     int screen_x = (g.x * grid_cell_spacing) + board_offset;
     int screen_y = (g.y * grid_cell_spacing) + board_offset;
     rect(screen_x, screen_y, grid_cell_size, grid_cell_size);
   }
-  
+
   for (IVec3 g : grid.boxes) {
     fill(102, 10, 0);
     int screen_x = (g.x * grid_cell_spacing) + board_offset;
